@@ -1,0 +1,178 @@
+services:
+  k6:
+    image: grafana/k6:0.52.0
+    # ports:
+    #   - "127.0.0.1:5665:5665"
+    network_mode: host
+    volumes:
+      - ${K6_HOME:-./volumes/k6}:/home/k6
+    environment:
+      # https://app.k6.io/tests/new/cli
+      K6_CLOUD_TOKEN: ${K6_CLOUD_TOKEN}
+      # Support TS and most ES6+ features
+      # https://grafana.com/docs/k6/latest/using-k6/javascript-typescript-compatibility-mode/
+      K6_COMPATIBILITY_MODE: ${K6_COMPATIBILITY_MODE:-experimental_enhanced}
+      # https://grafana.com/docs/k6/latest/results-output/real-time/prometheus-remote-write/
+      K6_PROMETHEUS_RW_SERVER_URL: ${K6_PROMETHEUS_RW_SERVER_URL:-http://localhost:9090/api/v1/write}
+      K6_PROMETHEUS_RW_USERNAME: ${K6_PROMETHEUS_RW_USERNAME}
+      K6_PROMETHEUS_RW_PASSWORD: ${K6_PROMETHEUS_RW_PASSWORD}
+      K6_PROMETHEUS_RW_BEARER_TOKEN: ${K6_PROMETHEUS_RW_BEARER_TOKEN}
+      K6_PROMETHEUS_RW_PUSH_INTERVAL: ${K6_PROMETHEUS_RW_PUSH_INTERVAL:-"2s"}
+      K6_PROMETHEUS_RW_TREND_STATS: ${K6_PROMETHEUS_RW_TREND_STATS:-"p(95),p(99),min,max,avg"}
+      K6_PROMETHEUS_RW_TREND_AS_NATIVE_HISTOGRAM: 'false'
+      # https://grafana.com/docs/k6/latest/results-output/web-dashboard/
+      K6_WEB_DASHBOARD: 'true'
+      # K6_WEB_DASHBOARD_HOST: '0.0.0.0'
+      # K6_WEB_DASHBOARD_PORT: '5665'
+      K6_WEB_DASHBOARD_PERIOD: '2s'
+      K6_WEB_DASHBOARD_EXPORT: ${K6_WEB_DASHBOARD_EXPORT}
+
+  mongo:
+    image: mongo:4.2-bionic
+    volumes:
+      - mongo:/data/db
+    ports:
+      - "127.0.0.1:27017:27017"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  postgres:
+    image: postgres:14
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  pgadmin:
+    image: dpage/pgadmin4:9.3.0
+    environment:
+      PGADMIN_LISTEN_PORT: "54328"
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+    network_mode: host
+    ports:
+      - "127.0.0.1:54328:54328"
+    volumes:
+      - pgadmin:/var/lib/pgadmin
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg14
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: ${TIMESCALEDB_PASSWORD}
+      TIMESCALEDB_TELEMETRY: "off"
+      TS_TUNE_MEMORY: 2GB
+    ports:
+      - "127.0.0.1:15432:5432"
+    volumes:
+      - timescaledb:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  kafka:
+    image: bitnami/kafka:3.6.2-debian-12-r3
+    ports:
+      - "127.0.0.1:9092:9094"
+    environment:
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  redis:
+    image: redis:6-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis:/data
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # https://hub.docker.com/r/redis/redis-stack
+  redis-stack:
+    image: redis/redis-stack:7.4.0-v1
+    ports:
+      - "127.0.0.1:26379:6379"
+      - "127.0.0.1:26380:8001"
+    volumes:
+      - redis-stack:/data
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2022-10-15T19-57-03Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_SERVER_URL: ${MINIO_SERVER_URL}
+      MINIO_BROWSER_REDIRECT_URL: ${MINIO_BROWSER_REDIRECT_URL}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - minio:/data
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  nginx:
+    image: nginx:1.27.0
+    network_mode: host
+    ports:
+      - "127.0.0.1:80:80"
+      - "127.0.0.1:443:443"
+    volumes:
+      - "./volumes/nginx/conf.d:/etc/nginx/conf.d:ro"
+    deploy:
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
+
+  chartdb:
+    image: ghcr.io/chartdb/chartdb:1.14.0
+    environment:
+      DISABLE_ANALYTICS: "true"
+    ports:
+      - "127.0.0.1:3080:80"
+
+volumes:
+  mongo:
+  postgres:
+  pgadmin:
+  timescaledb:
+  redis:
+  redis-stack:
+  redisearch:
+  minio:
+

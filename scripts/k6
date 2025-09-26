@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+date=$(date -Is | sed s/:/-/g)
+
+home_dir=${K6_HOME:-$(pwd)}
+reports_dir=$home_dir/reports
+mkdir -p $reports_dir
+sudo chown 12345:12345 $reports_dir
+
+# K6_PROMETHEUS_RW_USERNAME=USERNAME \
+# K6_PROMETHEUS_RW_PASSWORD=PASSWORD \
+# K6_PROMETHEUS_RW_BEARER_TOKEN=TOKEN \
+K6_HOME=$home_dir \
+K6_WEB_DASHBOARD_EXPORT=${K6_WEB_DASHBOARD_EXPORT:-reports/$date.html} \
+  docker compose -f $(dirname "$0")/../docker-compose.yaml run --rm k6 $@

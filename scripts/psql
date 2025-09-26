@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+[[ -z $1 ]] && echo 'Runs PSQL command inside PostgreSQL container as superuser.
+Passes arguments to `psql` inside container.
+
+Usage:
+    psql <db> ...
+
+Envs:
+    CONTAINERID=stack-postgres-1
+        override the container id 
+' && exit 0
+
+container=${CONTAINER:-stack-postgres-1}
+echo container: $container
+docker exec -u postgres -it $container psql "$@"

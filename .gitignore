@@ -1,0 +1,4 @@
+.env
+volumes/k6/.config
+volumes/k6/reports
+volumes/nginx/conf.d/

@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+[[ -z $1 ]] && echo 'Creates a PostgreSQL user and db.
+
+Usage:
+    pguser <user/db>
+
+Envs:
+    CONTAINERID=stack-postgres-1
+        override the container id 
+    PROD=
+        if non-empty, generate a secure password suited for production environments;
+        otherwise, password will be the same as user (i.e. `$1`)
+' && exit 0
+
+container=${CONTAINERID:-stack-postgres-1}
+echo container: $container
+# `--createdb` is needed for Prisma (https://www.prisma.io/docs/orm/prisma-migrate/understanding-prisma-migrate/shadow-database#shadow-database-user-permissions)
+docker exec -u postgres -it $container createuser --createdb $1
+docker exec -u postgres -it $container createdb --owner=$1 $1
+
+[[ ! -z $PROD ]] && pass=$(openssl rand -hex 40) || pass=$1
+echo pass: $pass
+docker exec -u postgres -it $container psql -c "ALTER USER $1 PASSWORD '$pass';"
